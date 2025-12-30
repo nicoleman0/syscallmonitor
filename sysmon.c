@@ -125,6 +125,45 @@ const char* get_syscall_name(long syscall_num) {
     return "unknown";
 }
 
+// Function to read a string from child process memory using PTRACE_PEEKDATA
+// Returns a dynamically allocated string (caller must free)
+// Returns NULL on error
+char* read_string(pid_t child, unsigned long addr, size_t max_len) {
+    if (addr == 0) {
+        return NULL;
+    }
+
+    char *str = malloc(max_len + 1);
+    if (!str) {
+        return NULL;
+    }
+
+    size_t i = 0;
+    while (i < max_len) {
+        // Read one word (8 bytes on x86_64) at a time
+        long data = ptrace(PTRACE_PEEKDATA, child, addr + i, NULL);
+        if (data == -1) {
+            free(str);
+            return NULL;
+        }
+
+        // Copy bytes from the word
+        for (int j = 0; j < sizeof(long) && i < max_len; j++, i++) {
+            char c = (data >> (j * 8)) & 0xFF;
+            str[i] = c;
+            
+            // Stop at null terminator
+            if (c == '\0') {
+                return str;
+            }
+        }
+    }
+
+    // Null-terminate if we hit max_len
+    str[max_len] = '\0';
+    return str;
+}
+
 int main(int argc, char *argv[]) {
     pid_t child;
     int status;
@@ -155,7 +194,58 @@ int main(int argc, char *argv[]) {
                 break;
 
             ptrace(PTRACE_GETREGS, child, NULL, &regs);
-            printf("Syscall: %lld (%s)\n", regs.orig_rax, get_syscall_name(regs.orig_rax));
+            long syscall_num = regs.orig_rax;
+            const char* syscall_name = get_syscall_name(syscall_num);
+            
+            printf("Syscall: %lld (%s)", syscall_num, syscall_name);
+            
+            // Read string arguments for specific syscalls
+            char *arg_str = NULL;
+            if (syscall_num == 2) {  // open
+                arg_str = read_string(child, regs.rdi, 256);
+                if (arg_str) {
+                    printf(" filename=\"%s\"", arg_str);
+                    free(arg_str);
+                }
+            } else if (syscall_num == 257) {  // openat
+                arg_str = read_string(child, regs.rsi, 256);
+                if (arg_str) {
+                    printf(" filename=\"%s\"", arg_str);
+                    free(arg_str);
+                }
+            } else if (syscall_num == 59) {  // execve
+                arg_str = read_string(child, regs.rdi, 256);
+                if (arg_str) {
+                    printf(" filename=\"%s\"", arg_str);
+                    free(arg_str);
+                }
+            } else if (syscall_num == 21) {  // access
+                arg_str = read_string(child, regs.rdi, 256);
+                if (arg_str) {
+                    printf(" pathname=\"%s\"", arg_str);
+                    free(arg_str);
+                }
+            } else if (syscall_num == 4 || syscall_num == 6) {  // stat, lstat
+                arg_str = read_string(child, regs.rdi, 256);
+                if (arg_str) {
+                    printf(" pathname=\"%s\"", arg_str);
+                    free(arg_str);
+                }
+            } else if (syscall_num == 87) {  // unlink
+                arg_str = read_string(child, regs.rdi, 256);
+                if (arg_str) {
+                    printf(" pathname=\"%s\"", arg_str);
+                    free(arg_str);
+                }
+            } else if (syscall_num == 263) {  // unlinkat
+                arg_str = read_string(child, regs.rsi, 256);
+                if (arg_str) {
+                    printf(" pathname=\"%s\"", arg_str);
+                    free(arg_str);
+                }
+            }
+            
+            printf("\n");
 
             ptrace(PTRACE_SYSCALL, child, NULL, NULL);
             waitpid(child, &status, 0);
