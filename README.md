@@ -55,3 +55,10 @@ At exit:
 ```c
 syscall(SYS_openat, "/etc/passwd", O_RDONLY);
 ```
+
+| Stage | orig_rax | rax |
+| ----- | -------- | --- |
+| Entry | 257      | 257 |
+| Exit  | 257      | 3   |
+
+Reading rax at the wrong time will result in an erroneous understanding.
