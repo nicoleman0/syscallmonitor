@@ -495,9 +495,9 @@ int main(int argc, char *argv[]) {
                 } else if (config.show_return_values) {
                     if (config.use_colors) {
                         const char *color = (return_val < 0) ? COLOR_RED : COLOR_GREEN;
-                        printf(" = %s%lld%s", color, return_val, COLOR_RESET);
+                        printf(" = %s%ld%s", color, return_val, COLOR_RESET);
                     } else {
-                        printf(" = %lld", return_val);
+                        printf(" = %ld", return_val);
                     }
                     printf(" <%0.6f ms>\n", elapsed / 1000.0);
                 } else {
