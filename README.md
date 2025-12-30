@@ -1,56 +1,60 @@
 # System Call Monitor (Linux x86_64)
 
-## Basic Functionality
+A ptrace-based tool for monitoring system calls in Linux processes. Tracks entry and exit points, arguments, return values, and timing.
 
-```csharp
+## How It Works
+
+System calls are intercepted at two points:
+
+```text
 User code
    |
    |  syscall instruction
    v
-[STOP #1]  ← entry (args visible)
+[STOP #1]  ← entry (arguments visible)
 Kernel executes syscall
 [STOP #2]  ← exit (return value visible)
    |
 User code resumes
 ```
 
-- Entry tells you intent
-- Exit tells you impact
+Entry shows intent. Exit shows result.
 
-```bash
-open("/etc/passwd") → -1
+Example:
+
+```text
+open("/etc/passwd", O_RDONLY) → -1 (EACCES)
 ```
 
-- Intent: sensitive file access
-- Impact: failed (maybe blocked)
+You see both what was attempted and what happened.
 
-## Difference between orig_rax and rax
+## Understanding orig_rax vs rax
 
 | Register   | Meaning                          |
 | ---------- | -------------------------------- |
 | `orig_rax` | Syscall number **requested**     |
 | `rax`      | Return value **after execution** |
 
-### Why two registers?
+### Why Two Registers?
 
-Because rax gets overwritten. When a syscall happens:
+The kernel preserves the syscall number because rax gets overwritten during execution:
 
-- User puts syscall number into rax
-- Kernel copies it into orig_rax
-- Kernel uses rax internally
-- Kernel writes return value back into rax
+1. User places syscall number in rax
+2. Kernel saves it to orig_rax
+3. Kernel executes syscall (uses rax internally)
+4. Kernel writes return value to rax
 
-So, at entry:
+At entry:
 
 - orig_rax = syscall number
-- rax = syscall number (still)
+- rax = syscall number (unchanged)
 
 At exit:
 
-- orig_rax = syscall number
+- orig_rax = syscall number (preserved)
 - rax = return value
 
-*Example:*
+Example:
 
 ```c
 syscall(SYS_openat, "/etc/passwd", O_RDONLY);
@@ -61,4 +65,4 @@ syscall(SYS_openat, "/etc/passwd", O_RDONLY);
 | Entry | 257      | 257 |
 | Exit  | 257      | 3   |
 
-Reading rax at the wrong time will result in an erroneous understanding.
+Reading rax at entry vs exit gives you different information. At entry it's the syscall number. At exit it's the result.
